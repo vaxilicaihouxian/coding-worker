@@ -1,0 +1,222 @@
+import { HatchetClient, StickyStrategy } from '@hatchet-dev/typescript-sdk';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+import z from 'zod';
+
+// Hatchet 客户端 — 全部通过环境变量注入
+const hatchet = HatchetClient.init();
+
+// ============================================================
+// 插件配置 — 环境变量 CLAUDE_PLUGIN_PATHS 逗号分隔多个路径
+// ============================================================
+function getPlugins() {
+  const paths = process.env.CLAUDE_PLUGIN_PATHS;
+  if (!paths) return undefined;
+  return paths.split(',').map((p) => ({ type: 'local' as const, path: p.trim() }));
+}
+
+// ============================================================
+// 公共: 调用 Claude Code，每步通过 Hatchet ctx.logger.info 推送
+// ============================================================
+type StepEntry = {
+  step: number;
+  type: 'thinking' | 'tool_call' | 'tool_result' | 'result' | 'error';
+  content: string;
+};
+
+type Logger = (message: string) => Promise<void> | void;
+
+async function runClaudeCode(prompt: string, log: Logger) {
+  const steps: StepEntry[] = [];
+  let stepCount = 0;
+
+  for await (const message of query({
+    prompt,
+    options: {
+      model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-20250514',
+      allowedTools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob'],
+      permissionMode: 'acceptEdits',
+      plugins: getPlugins(),
+      settingSources: ['user'],
+    },
+  })) {
+    const msg = message as any;
+
+    if (msg.type === 'system') {
+      if (msg.subtype === 'init') {
+        const model = msg.model || 'unknown';
+        await log(`[System] session init, model=${model}`);
+      } else if (msg.subtype === 'success') {
+        // Claude Code 执行完成，result 字段包含最终文本
+        const result = msg.result || '';
+        steps.push({ step: ++stepCount, type: 'result', content: result });
+      }
+      continue;
+    }
+
+    if (msg.type === 'assistant') {
+      const blocks = msg.message?.content;
+      if (Array.isArray(blocks)) {
+        for (const block of blocks) {
+          if (block.type === 'text' && block.text) {
+            steps.push({ step: ++stepCount, type: 'thinking', content: block.text });
+            await log(`[Claude] ${block.text}`);
+          }
+          if (block.type === 'tool_use') {
+            const toolName = block.name || 'unknown';
+            steps.push({ step: ++stepCount, type: 'tool_call', content: `调用工具: ${toolName}` });
+            await log(`[Tool] ${toolName}`);
+          }
+        }
+      }
+      continue;
+    }
+
+    if (msg.type === 'user') {
+      const tr = msg.tool_use_result;
+      if (tr) {
+        const raw = tr.stdout || tr.stderr || JSON.stringify(tr).slice(0, 500);
+        steps.push({ step: ++stepCount, type: 'tool_result', content: raw.slice(0, 500) });
+        await log(`[ToolResult] ${raw.slice(0, 200)}`);
+      }
+    }
+  }
+
+  // 优先用 system success 的 result，否则汇总所有 thinking 文本
+  const explicitResult = steps
+    .filter((s) => s.type === 'result')
+    .map((s) => s.content)
+    .join('\n');
+  const thinkingSummary = steps
+    .filter((s) => s.type === 'thinking')
+    .map((s) => s.content)
+    .join('\n');
+  const summary = explicitResult || thinkingSummary;
+
+  return { steps, summary };
+}
+
+// ============================================================
+// Coding Agent: 单步编码
+// ============================================================
+export const codingAgent = hatchet.durableTask({
+  name: 'coding-agent',
+  sticky: StickyStrategy.HARD,
+  executionTimeout: '30m',
+  retries: 2,
+  inputValidator: z.object({
+    prompt: z.string(),
+  }),
+  description: 'Claude Code 单步执行编码任务',
+  fn: async (input, ctx) => {
+    const { steps, summary } = await runClaudeCode(input.prompt, (msg) => ctx.logger.info(msg));
+    return { status: 'completed', output: summary, steps };
+  },
+});
+
+// ============================================================
+// Coding + Review Durable Workflow
+//   coding (task) ──→ review (task) ──→ emit event
+// ============================================================
+export const codingWithReview = hatchet.workflow({
+  name: 'coding-with-review',
+  sticky: StickyStrategy.HARD,
+  description: '编码完成后自动 Code Review',
+  inputValidator: z.object({
+    prompt: z.string(),
+  }),
+});
+
+const codingTask = codingWithReview.task({
+  name: 'coding',
+  executionTimeout: '300m',
+  retries: 2,
+  fn: async (input, ctx) => {
+    await ctx.logger.info('=== Step 1: Coding ===');
+    const { steps, summary } = await runClaudeCode(input.prompt, (msg) => ctx.logger.info(msg));
+    return { status: 'completed', output: summary, steps };
+  },
+});
+
+codingWithReview.task({
+  name: 'review',
+  parents: [codingTask],
+  executionTimeout: '30m',
+  fn: async (input, ctx) => {
+    await ctx.logger.info('=== Step 2: Code Review ===');
+    const codingResult: any = await ctx.parentOutput(codingTask);
+    const { steps, summary } = await runClaudeCode(
+      [
+        `Review the code changes just made for: "${input.prompt}"`,
+        '',
+        `Coding step output: ${codingResult.output}`,
+        '',
+        'Steps:',
+        '1. Run "git diff" to see all changes',
+        '2. Read each modified file in full',
+        '3. Provide a structured code review:',
+        '   - For each issue: severity (critical/major/minor/nit), description, file:line, suggested fix',
+        '   - Security: check for injection, XSS, leaked secrets, unsafe patterns',
+        '   - Correctness: logic errors, edge cases, error handling gaps',
+        '   - Maintainability: naming, duplication, clarity',
+        '4. End with an overall assessment (approve / changes-requested)',
+      ].join('\n'),
+      (msg) => ctx.logger.info(msg)
+    );
+
+    const result = {
+      status: 'completed',
+      codeOutput: codingResult.output,
+      reviewOutput: summary,
+      reviewSteps: steps,
+    };
+
+    // 发送 coding.finish 事件
+    await emitCodingFinishEvent(ctx, {
+      prompt: input.prompt,
+      codingOutput: codingResult.output,
+      reviewOutput: summary,
+      status: 'completed',
+    });
+
+    return result;
+  },
+});
+
+// ============================================================
+// 发送 coding.finish 事件 (在 coding 或 review 完成后触发)
+// ============================================================
+async function emitCodingFinishEvent(
+  ctx: any,
+  data: {
+    prompt: string;
+    codingOutput: string;
+    reviewOutput?: string;
+    status: string;
+  }
+) {
+  const payload = {
+    runId: ctx.workflowRunId(),
+    workflowName: ctx.workflowName(),
+    taskName: ctx.taskName(),
+    ...data,
+    timestamp: new Date().toISOString(),
+  };
+  await hatchet.events.push('coding.finish', payload);
+  await ctx.logger.info(`[Event] emitted coding.finish for run ${ctx.workflowRunId()}`);
+}
+
+// ============================================================
+// 启动 Worker
+// ============================================================
+async function main() {
+  const worker = await hatchet.worker('claude-coding-worker', {
+    slots: 1,
+    workflows: [codingAgent, codingWithReview],
+  });
+  await worker.start();
+  console.log('Worker started, waiting for tasks...');
+}
+
+if (require.main === module) {
+  main().catch(console.error);
+}

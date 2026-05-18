@@ -11,31 +11,32 @@ export function createCodingTaskWorkflow(hatchet: HatchetClient) {
 
   workflow.task({
     name: 'execute',
-    fn: async (input: CodingTaskInput) => {
+    executionTimeout: '300m',
+    fn: async (input: CodingTaskInput, ctx: any) => {
       const { mode, task } = parseMode(input.description);
       const workDir = input.workDir || process.cwd();
+      const log = (msg: string) => ctx.logger.info(msg);
 
       if (mode === 'autopilot') {
-        // Simple task: one-shot autopilot
-        const result = await runClaude({
-          prompt: `autopilot ${task}`,
-          workDir,
-        });
-        return { mode: 'autopilot', result };
+        await ctx.logger.info('=== Mode: autopilot ===');
+        const { steps, summary } = await runClaude({ prompt: `autopilot ${task}`, workDir }, log);
+        return { mode: 'autopilot', result: summary, steps };
       }
 
-      // Complex task: ralplan plan first, then ralph execute
-      const planResult = await runClaude({
-        prompt: `ralplan ${task}`,
-        workDir,
-      });
+      // ralplan: plan first, then execute
+      await ctx.logger.info('=== Mode: ralplan — Step 1: Planning ===');
+      const planResult = await runClaude({ prompt: `ralplan ${task}`, workDir }, log);
 
-      const executeResult = await runClaude({
-        prompt: `team ralph 按你规划的去实现吧！`,
-        workDir,
-      });
+      await ctx.logger.info('=== Mode: ralplan — Step 2: Executing ===');
+      const executeResult = await runClaude({ prompt: `team ralph 按你规划的去实现吧！`, workDir }, log);
 
-      return { mode: 'ralplan', plan: planResult, result: executeResult };
+      return {
+        mode: 'ralplan',
+        plan: planResult.summary,
+        planSteps: planResult.steps,
+        result: executeResult.summary,
+        resultSteps: executeResult.steps,
+      };
     },
   });
 
