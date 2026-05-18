@@ -23,6 +23,9 @@
     "typescript": "^5.5.0",
     "ts-node": "^10.9.0"
   },
+  "files": [
+    "dist"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },

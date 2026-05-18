@@ -12,7 +12,6 @@ export interface Config {
   worker_name: string;
   slots: number;
   work_dir: string;
-  omc_dir?: string;
 }
 
 export interface CliArgs {
@@ -24,7 +23,6 @@ export interface CliArgs {
   name?: string;
   slots?: number;
   workDir?: string;
-  omcDir?: string;
   config?: string;
 }
 
@@ -40,7 +38,6 @@ interface FileConfig {
     name?: string;
     slots?: number;
     work_dir?: string;
-    omc_dir?: string;
   };
 }
 
@@ -135,21 +132,5 @@ export function loadConfig(cliArgs: CliArgs = {}): Config {
       ?? process.env.CODING_WORKER_WORK_DIR
       ?? fileConfig?.worker?.work_dir
       ?? process.cwd(),
-    omc_dir: cliArgs.omcDir
-      ?? process.env.CODING_WORKER_OMC_DIR
-      ?? fileConfig?.worker?.omc_dir
-      ?? findDefaultOmcDir(),
   };
-}
-
-function findDefaultOmcDir(): string | undefined {
-  const cacheDir = path.join(os.homedir(), '.claude', 'plugins', 'cache', 'omc', 'oh-my-claudecode');
-  if (!fs.existsSync(cacheDir)) {
-    return undefined;
-  }
-  const versions = fs.readdirSync(cacheDir).sort().reverse();
-  if (versions.length === 0) {
-    return undefined;
-  }
-  return path.join(cacheDir, versions[0]);
 }
