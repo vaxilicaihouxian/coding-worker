@@ -109,19 +109,9 @@ export function createCodingTaskWorkflow(hatchet: HatchetClient, workflowName: s
         return { branch: '', committed: false, result: executeResult.result || executeResult.plan };
       }
 
-      // Check if there are changes
-      let hasChanges = false;
-      try {
-        execSync('git diff --quiet', { cwd: workDir, stdio: 'pipe' });
-        // No unstaged changes — check untracked
-        const untracked = execSync('git ls-files --others --exclude-standard', { cwd: workDir, encoding: 'utf-8' }).trim();
-        hasChanges = untracked.length > 0;
-      } catch {
-        // git diff --quiet exits non-zero when there are differences
-        hasChanges = true;
-      }
-
-      if (!hasChanges) {
+      // Check if there are any changes (staged, unstaged, or untracked)
+      const status = execSync('git status --porcelain', { cwd: workDir, encoding: 'utf-8' }).trim();
+      if (!status) {
         await ctx.logger.info(`[Commit] no changes to commit on branch ${branch}`);
         return { branch, committed: false, result: executeResult.result || executeResult.plan };
       }
@@ -131,6 +121,11 @@ export function createCodingTaskWorkflow(hatchet: HatchetClient, workflowName: s
       const message = `coding-worker: ${input.description.slice(0, 72)}`;
       execSync(`git commit -m ${JSON.stringify(message)}`, { cwd: workDir, stdio: 'pipe' });
       await ctx.logger.info(`[Commit] committed to branch: ${branch}`);
+
+      // Remove worktree (keep the branch for review/merge)
+      const baseDir = input.workDir || process.cwd();
+      execSync(`git worktree remove "${workDir}"`, { cwd: baseDir, stdio: 'pipe' });
+      await ctx.logger.info(`[Commit] worktree removed, branch ${branch} preserved`);
 
       return {
         branch,
