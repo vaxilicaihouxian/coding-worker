@@ -2,9 +2,9 @@ import { HatchetClient } from '@hatchet-dev/typescript-sdk';
 import { CodingTaskInput, CodingTaskInputSchema, parseMode } from './schemas';
 import { runClaude } from '../claude-runner';
 
-export function createCodingTaskWorkflow(hatchet: HatchetClient) {
+export function createCodingTaskWorkflow(hatchet: HatchetClient, workflowName: string) {
   const workflow = hatchet.workflow<CodingTaskInput>({
-    name: 'coding-task',
+    name: workflowName,
     inputValidator: CodingTaskInputSchema,
     description: 'Unified coding task. Prefix "autopilot" for simple tasks, "ralplan" for complex tasks (plan then execute automatically).',
   });

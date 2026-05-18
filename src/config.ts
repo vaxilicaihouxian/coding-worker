@@ -10,6 +10,7 @@ export interface Config {
   tenant_id?: string;
   tls_strategy: 'tls' | 'mtls' | 'none';
   worker_name: string;
+  workflow_suffix: string;
   slots: number;
   work_dir: string;
 }
@@ -21,6 +22,7 @@ export interface CliArgs {
   tenantId?: string;
   tlsStrategy?: 'tls' | 'mtls' | 'none';
   name?: string;
+  workflowSuffix?: string;
   slots?: number;
   workDir?: string;
   config?: string;
@@ -36,6 +38,7 @@ interface FileConfig {
   };
   worker?: {
     name?: string;
+    workflow_suffix?: string;
     slots?: number;
     work_dir?: string;
   };
@@ -123,6 +126,10 @@ export function loadConfig(cliArgs: CliArgs = {}): Config {
     worker_name: cliArgs.name
       ?? process.env.CODING_WORKER_NAME
       ?? fileConfig?.worker?.name
+      ?? '',
+    workflow_suffix: cliArgs.workflowSuffix
+      ?? process.env.CODING_WORKER_WORKFLOW_SUFFIX
+      ?? fileConfig?.worker?.workflow_suffix
       ?? '',
     slots: cliArgs.slots
       ?? (process.env.CODING_WORKER_SLOTS ? parseInt(process.env.CODING_WORKER_SLOTS, 10) : undefined)
