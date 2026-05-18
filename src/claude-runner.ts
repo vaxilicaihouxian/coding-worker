@@ -21,7 +21,7 @@ export interface RunClaudeResult {
 export async function runClaude(opts: RunClaudeOptions, log?: Logger): Promise<RunClaudeResult> {
   const steps: StepEntry[] = [];
   let stepCount = 0;
-
+  await log?.(`[Claude] 任务接收:${JSON.stringify(opts)}`);
   for await (const message of query({
     prompt: opts.prompt,
     options: {

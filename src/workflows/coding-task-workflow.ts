@@ -25,6 +25,10 @@ export function createCodingTaskWorkflow(hatchet: HatchetClient, workflowName: s
     name: workflowName,
     inputValidator: CodingTaskInputSchema,
     description: 'Unified coding task. Prefix "autopilot" for simple tasks, "ralplan" for complex tasks (plan then execute automatically).',
+    taskDefaults: {
+      executionTimeout: '300m',
+      scheduleTimeout: '10h',
+    },
   });
 
   // ── Step 1: prepare — git worktree 隔离 ────────────────────
@@ -56,12 +60,10 @@ export function createCodingTaskWorkflow(hatchet: HatchetClient, workflowName: s
       return { workDir: worktreePath, branch, isWorktree: true };
     },
   });
-
   // ── Step 2: execute — 编码 ─────────────────────────────────
   const executeTask = workflow.task({
     name: 'execute',
     parents: [prepareTask],
-    executionTimeout: '300m',
     fn: async (input: CodingTaskInput, ctx: any) => {
       const prepareResult: any = await ctx.parentOutput(prepareTask);
       const workDir = prepareResult.workDir;
@@ -71,16 +73,16 @@ export function createCodingTaskWorkflow(hatchet: HatchetClient, workflowName: s
       await ctx.logger.info(`[Execute] mode=${mode}, workDir=${workDir}`);
 
       if (mode === 'autopilot') {
-        const { steps, summary } = await runClaude({ prompt: `autopilot ${task}`, workDir }, log);
+        const { steps, summary } = await runClaude({ prompt: `/autopilot ${task}`, workDir }, log);
         return { mode: 'autopilot', result: summary, steps, workDir };
       }
 
       // ralplan: plan first, then execute
       await ctx.logger.info('[Execute] ralplan — planning');
-      const planResult = await runClaude({ prompt: `ralplan ${task}`, workDir }, log);
+      const planResult = await runClaude({ prompt: `/ralplan ${task}`, workDir }, log);
 
       await ctx.logger.info('[Execute] ralplan — executing');
-      const executeResult = await runClaude({ prompt: `team ralph 按你规划的去实现吧！`, workDir }, log);
+      const executeResult = await runClaude({ prompt: `/team ralph 按你规划的去实现吧！`, workDir }, log);
 
       return {
         mode: 'ralplan',
@@ -92,7 +94,6 @@ export function createCodingTaskWorkflow(hatchet: HatchetClient, workflowName: s
       };
     },
   });
-
   // ── Step 3: commit — git add/commit ─────────────────────────
   workflow.task({
     name: 'commit',
