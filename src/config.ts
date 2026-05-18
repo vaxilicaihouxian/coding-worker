@@ -134,7 +134,7 @@ export function loadConfig(cliArgs: CliArgs = {}): Config {
     slots: cliArgs.slots
       ?? (process.env.CODING_WORKER_SLOTS ? parseInt(process.env.CODING_WORKER_SLOTS, 10) : undefined)
       ?? fileConfig?.worker?.slots
-      ?? 10,
+      ?? 2,
     work_dir: cliArgs.workDir
       ?? process.env.CODING_WORKER_WORK_DIR
       ?? fileConfig?.worker?.work_dir
