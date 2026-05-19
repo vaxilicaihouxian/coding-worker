@@ -29,6 +29,8 @@ export function createInfoflowNotifyWorkflow(hatchet: HatchetClient, workflowNam
       const header = [
         '# Coding Task Completed',
         '',
+        '| Field | Value |',
+        '|----|----|',
         `| Run ID | ${input.runId} |`,
         `| Workflow | ${input.workflowName} |`,
         `| Status | ${input.status} |`,
@@ -48,9 +50,9 @@ export function createInfoflowNotifyWorkflow(hatchet: HatchetClient, workflowNam
         trunc(input.prompt, promptBudget),
         '',
         '## Output',
-        '```',
+        '',
         trunc(input.codingOutput, outputBudget),
-        '```',
+        '',
       ].join('\n');
 
       const payload = {
