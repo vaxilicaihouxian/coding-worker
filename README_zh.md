@@ -1,8 +1,12 @@
 # Coding Worker
 
+> 想睡觉的时候模型自己实现需求么？coding worker 让你的服务器晚上玩命干活，派任务就行！
+
 基于 [Hatchet](https://hatchet.run/) 任务队列和 [Claude Code](https://docs.anthropic.com/en/docs/claude-code)（通过 `@anthropic-ai/claude-agent-sdk`）的分布式编码任务 Worker，支持 [oh-my-claudecode](https://github.com/anthropics/claude-code) 插件。
 
 它作为 Worker 连接到 Hatchet 实例，从队列中接收编码任务，驱动 Claude Code 执行——自动进行 git worktree 隔离、分支管理和结果流式推送。
+
+> **强烈建议：** 在运行 Worker 的机器上全局安装 [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) 插件，然后使用 `coding-worker coding` 模式，最大化利用 autopilot 和 ralplan 全自动"蹬"起来！
 
 ## 功能特性
 

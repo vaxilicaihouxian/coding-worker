@@ -1,8 +1,12 @@
 # Coding Worker
 
+> Want the model to implement your requirements while you sleep? Coding Worker makes your server work its tail off at night — just dispatch tasks and let it rip!
+
 A distributed coding task worker powered by [Hatchet](https://hatchet.run/) and [Claude Code](https://docs.anthropic.com/en/docs/claude-code) (via `@anthropic-ai/claude-agent-sdk`), with [oh-my-claudecode](https://github.com/anthropics/claude-code) plugin support.
 
 It connects to a Hatchet instance as a worker, receives coding tasks from the queue, and drives Claude Code to execute them — with automatic git worktree isolation, branch management, and result streaming.
+
+> **Strongly recommended:** Install the [oh-my-claudecode](https://github.com/Yeachan-Heo/oh-my-claudecode) plugin globally on the machine running the worker, then use `coding-worker coding` mode to fully unleash autopilot and ralplan for hands-free, full-auto execution!
 
 ## Features
 
