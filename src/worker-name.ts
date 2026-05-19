@@ -10,13 +10,13 @@ function generateBaseSuffix(): string {
 export const WORKFLOW_PREFIX = 'coding-worker-';
 
 export function generateWorkerName(suffix?: string): string {
-  return `${WORKFLOW_PREFIX}${suffix || generateBaseSuffix()}`;
+  return `${WORKFLOW_PREFIX}${(suffix || generateBaseSuffix()).toLowerCase()}`;
 }
 
 export function generateWorkflowName(suffix?: string): string {
-  return `${WORKFLOW_PREFIX}${suffix || generateBaseSuffix()}`;
+  return `${WORKFLOW_PREFIX}${(suffix || generateBaseSuffix()).toLowerCase()}`;
 }
 
 export function generateNotifyName(suffix?: string): string {
-  return `infoflow-${suffix || generateBaseSuffix()}`;
+  return `infoflow-${(suffix || generateBaseSuffix()).toLowerCase()}`;
 }
