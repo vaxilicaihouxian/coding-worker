@@ -2,8 +2,11 @@ import { HatchetClient } from '@hatchet-dev/typescript-sdk/v1';
 import { loadConfig, CliArgs } from './config';
 import { generateWorkerName, generateWorkflowName } from './worker-name';
 import { createCodingTaskWorkflow } from './workflows/coding-task-workflow';
+import { createSimpleTaskWorkflow } from './workflows/simple-task-workflow';
 
-export async function startWorker(cliArgs: CliArgs) {
+export type WorkflowType = 'simple' | 'coding';
+
+export async function startWorker(cliArgs: CliArgs, workflowType: WorkflowType = 'simple') {
   console.log('Starting coding-worker...');
 
   // 1. Load config (host_port/api_url/tenant_id auto-extracted from JWT token)
@@ -28,12 +31,16 @@ export async function startWorker(cliArgs: CliArgs) {
     },
   });
 
-  // 5. Register workflow
-  const codingTaskWorkflow = createCodingTaskWorkflow(hatchet, workflowName);
+  // 5. Register workflow based on type
+  const workflow = workflowType === 'coding'
+    ? createCodingTaskWorkflow(hatchet, workflowName)
+    : createSimpleTaskWorkflow(hatchet, workflowName);
+  console.log(`Workflow type: ${workflowType}`);
+
   console.log(`Actual slots: ${config.slots}`);
   // 6. Create and start worker
   const worker = await hatchet.worker(workerName, {
-    workflows: [codingTaskWorkflow],
+    workflows: [workflow],
     slots: config.slots,
   });
 
