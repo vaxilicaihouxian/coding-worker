@@ -1,10 +1,8 @@
 import { HatchetClient } from '@hatchet-dev/typescript-sdk';
 import { FinishEventPayloadSchema, FinishEventPayload, finishEventName } from '../notify';
 
-export function createInfoflowNotifyWorkflow(hatchet: HatchetClient, workflowName: string) {
-  const eventName = finishEventName(workflowName);
-  const suffix = workflowName.replace(/^coding-workflow-/, '');
-  const notifyWorkflowName = suffix ? `infoflow-notify-${suffix}` : 'infoflow-notify';
+export function createInfoflowNotifyWorkflow(hatchet: HatchetClient, codingWorkflowName: string, notifyWorkflowName: string) {
+  const eventName = finishEventName(codingWorkflowName);
 
   const workflow = hatchet.workflow<FinishEventPayload>({
     name: notifyWorkflowName,

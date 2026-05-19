@@ -1,6 +1,7 @@
 import { HatchetClient } from '@hatchet-dev/typescript-sdk/v1';
 import { loadConfig, CliArgs } from './config';
-import { generateWorkerName, generateWorkflowName } from './worker-name';
+import { generateWorkerName, generateWorkflowName, generateNotifyName } from './worker-name';
+import { finishEventName } from './notify';
 import { createCodingTaskWorkflow } from './workflows/coding-task-workflow';
 import { createSimpleTaskWorkflow } from './workflows/simple-task-workflow';
 import { createInfoflowNotifyWorkflow } from './workflows/infoflow-notify-workflow';
@@ -13,12 +14,10 @@ export async function startWorker(cliArgs: CliArgs, workflowType: WorkflowType =
   // 1. Load config (host_port/api_url/tenant_id auto-extracted from JWT token)
   const config = loadConfig(cliArgs);
 
-  // 2. Resolve worker name
-  const workerName = config.worker_name || generateWorkerName();
-  console.log(`Worker name: ${workerName}`);
-
-  // 3. Resolve workflow name
+  // 2. Resolve worker name and workflow name (same value)
+  const workerName = generateWorkerName(config.workflow_suffix);
   const workflowName = generateWorkflowName(config.workflow_suffix);
+  console.log(`Worker name: ${workerName}`);
   console.log(`Workflow name: ${workflowName}`);
 
   // 4. Initialize Hatchet client
@@ -56,12 +55,13 @@ export async function startNotifyWorker(cliArgs: CliArgs) {
   console.log('Starting infoflow notify worker...');
 
   const config = loadConfig(cliArgs);
-  const workerName = config.worker_name || generateWorkerName();
-  const notifyWorkerName = `infoflow-${workerName}`;
-  const workflowName = generateWorkflowName(config.workflow_suffix);
+  const notifyName = generateNotifyName(config.workflow_suffix);
+  const codingWorkflowName = generateWorkflowName(config.workflow_suffix);
 
-  console.log(`Notify worker name: ${notifyWorkerName}`);
-  console.log(`Listening for event: ${workflowName}.finish`);
+  const eventName = finishEventName(codingWorkflowName);
+  console.log(`Notify worker name: ${notifyName}`);
+  console.log(`Notify workflow name: ${notifyName}`);
+  console.log(`Listening for event: ${eventName}`);
 
   const hatchet = HatchetClient.init({
     token: config.token,
@@ -73,13 +73,13 @@ export async function startNotifyWorker(cliArgs: CliArgs) {
     },
   });
 
-  const infoflowWorkflow = createInfoflowNotifyWorkflow(hatchet, workflowName);
+  const infoflowWorkflow = createInfoflowNotifyWorkflow(hatchet, codingWorkflowName, notifyName);
 
-  const worker = await hatchet.worker(notifyWorkerName, {
+  const worker = await hatchet.worker(notifyName, {
     workflows: [infoflowWorkflow],
   });
 
-  console.log(`infoflow-notify-worker "${notifyWorkerName}" connected (tls: ${config.tls_strategy})`);
+  console.log(`infoflow-notify-worker "${notifyName}" connected (tls: ${config.tls_strategy})`);
   console.log('Waiting for finish events...');
 
   await worker.start();
