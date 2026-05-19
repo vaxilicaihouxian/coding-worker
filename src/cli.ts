@@ -1,10 +1,11 @@
 import { Command } from 'commander';
 import * as readline from 'readline';
-import { startWorker } from './start';
+import { startWorker, startNotifyWorker } from './start';
 import { WorkflowType } from './start';
 import { loadConfig } from './config';
 import { generateWorkflowName, WORKFLOW_PREFIX } from './worker-name';
 import { HatchetClient } from '@hatchet-dev/typescript-sdk/v1';
+import { finishEventName, emitFinishEvent } from './notify';
 
 const program = new Command();
 
@@ -58,6 +59,68 @@ program
       process.exit(1);
     }
   });
+
+program
+  .command('notify')
+  .description('Start a notification worker (subcommand: infoflow)')
+  .addCommand(
+    new Command('infoflow')
+      .description('Start the infoflow notify worker (listens for workflow finish events and sends webhook)')
+      .option('--token <token>', 'Hatchet API Token (JWT, contains connection addresses)')
+      .option('--host-port <host:port>', 'gRPC address (override JWT default)')
+      .option('--api-url <url>', 'REST API address (override JWT default)')
+      .option('--tenant-id <id>', 'Tenant ID (override JWT default)')
+      .option('--tls-strategy <strategy>', 'TLS strategy: tls, mtls, none (default: none)', 'none')
+      .option('--workflow-suffix <suffix>', 'Workflow name suffix to listen for (event: coding-workflow-{suffix}.finish)')
+      .option('--config <path>', 'Config file path (default: .coding-worker.yaml)')
+      .action(async (opts) => {
+        try {
+          await startNotifyWorker(opts);
+        } catch (err: any) {
+          console.error('Failed to start infoflow notify worker:', err.message);
+          process.exit(1);
+        }
+      })
+      .addCommand(
+        new Command('test')
+          .description('Send a test finish event to verify the infoflow notification pipeline')
+          .option('--token <token>', 'Hatchet API Token (JWT, contains connection addresses)')
+          .option('--host-port <host:port>', 'gRPC address (override JWT default)')
+          .option('--api-url <url>', 'REST API address (override JWT default)')
+          .option('--tenant-id <id>', 'Tenant ID (override JWT default)')
+          .option('--tls-strategy <strategy>', 'TLS strategy: tls, mtls, none (default: none)', 'none')
+          .option('--workflow-suffix <suffix>', 'Workflow name suffix (event: coding-workflow-{suffix}.finish)')
+          .option('--config <path>', 'Config file path (default: .coding-worker.yaml)')
+          .action(async (opts) => {
+            try {
+              const config = loadConfig(opts);
+              const workflowName = generateWorkflowName(config.workflow_suffix);
+              const event = finishEventName(workflowName);
+              const hatchet = HatchetClient.init({
+                token: config.token,
+                host_port: config.host_port,
+                api_url: config.api_url,
+                tenant_id: config.tenant_id,
+                tls_config: { tls_strategy: config.tls_strategy },
+              });
+              await emitFinishEvent(hatchet, workflowName, {
+                runId: 'test-run-001',
+                workflowName,
+                prompt: 'This is a test notification from coding-worker',
+                codingOutput: 'Test completed successfully!',
+                status: 'completed',
+                branch: 'test-branch',
+                committed: true,
+              });
+              console.log(`Test event emitted: ${event}`);
+              console.log('If an infoflow notify worker is running, it should receive this event.');
+            } catch (err: any) {
+              console.error('Failed to send test event:', err.message);
+              process.exit(1);
+            }
+          })
+      )
+  );
 
 // ── helpers ──────────────────────────────────────────────────
 function initClientFromOpts(opts: any) {

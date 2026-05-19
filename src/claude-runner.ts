@@ -3,6 +3,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 export interface RunClaudeOptions {
   prompt: string;
   workDir: string;
+  resume?: string;
 }
 
 export type Logger = (message: string) => Promise<void> | void;
@@ -16,17 +17,20 @@ export interface StepEntry {
 export interface RunClaudeResult {
   steps: StepEntry[];
   summary: string;
+  sessionId?: string;
 }
 
 export async function runClaude(opts: RunClaudeOptions, log?: Logger): Promise<RunClaudeResult> {
   const steps: StepEntry[] = [];
   let stepCount = 0;
+  let sessionId: string | undefined;
   await log?.(`[Claude] 任务接收:${JSON.stringify(opts)}`);
   for await (const message of query({
     prompt: opts.prompt,
     options: {
       cwd: opts.workDir,
       permissionMode: 'bypassPermissions',
+      ...(opts.resume ? { resume: opts.resume } : {}),
     },
   })) {
     const msg = message as any;
@@ -34,7 +38,8 @@ export async function runClaude(opts: RunClaudeOptions, log?: Logger): Promise<R
     if (msg.type === 'system') {
       if (msg.subtype === 'init') {
         const model = msg.model || 'unknown';
-        await log?.(`[System] session init, model=${model}`);
+        sessionId = msg.session_id;
+        await log?.(`[System] session init, model=${model}, sessionId=${sessionId}`);
       } else if (msg.subtype === 'success') {
         const result = msg.result || '';
         steps.push({ step: ++stepCount, type: 'result', content: result });
@@ -80,5 +85,5 @@ export async function runClaude(opts: RunClaudeOptions, log?: Logger): Promise<R
     .join('\n');
   const summary = explicitResult || thinkingSummary;
 
-  return { steps, summary };
+  return { steps, summary, sessionId };
 }

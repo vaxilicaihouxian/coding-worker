@@ -3,6 +3,7 @@ import { loadConfig, CliArgs } from './config';
 import { generateWorkerName, generateWorkflowName } from './worker-name';
 import { createCodingTaskWorkflow } from './workflows/coding-task-workflow';
 import { createSimpleTaskWorkflow } from './workflows/simple-task-workflow';
+import { createInfoflowNotifyWorkflow } from './workflows/infoflow-notify-workflow';
 
 export type WorkflowType = 'simple' | 'coding';
 
@@ -47,6 +48,39 @@ export async function startWorker(cliArgs: CliArgs, workflowType: WorkflowType =
   console.log(`coding-worker "${workerName}" connected (tls: ${config.tls_strategy})`);
   console.log(`Workflow: ${workflowName}`);
   console.log('Waiting for tasks...');
+
+  await worker.start();
+}
+
+export async function startNotifyWorker(cliArgs: CliArgs) {
+  console.log('Starting infoflow notify worker...');
+
+  const config = loadConfig(cliArgs);
+  const workerName = config.worker_name || generateWorkerName();
+  const notifyWorkerName = `infoflow-${workerName}`;
+  const workflowName = generateWorkflowName(config.workflow_suffix);
+
+  console.log(`Notify worker name: ${notifyWorkerName}`);
+  console.log(`Listening for event: ${workflowName}.finish`);
+
+  const hatchet = HatchetClient.init({
+    token: config.token,
+    host_port: config.host_port,
+    api_url: config.api_url,
+    tenant_id: config.tenant_id,
+    tls_config: {
+      tls_strategy: config.tls_strategy,
+    },
+  });
+
+  const infoflowWorkflow = createInfoflowNotifyWorkflow(hatchet, workflowName);
+
+  const worker = await hatchet.worker(notifyWorkerName, {
+    workflows: [infoflowWorkflow],
+  });
+
+  console.log(`infoflow-notify-worker "${notifyWorkerName}" connected (tls: ${config.tls_strategy})`);
+  console.log('Waiting for finish events...');
 
   await worker.start();
 }

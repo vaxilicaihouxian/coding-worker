@@ -4,6 +4,7 @@ import { execSync } from 'child_process';
 import { HatchetClient } from '@hatchet-dev/typescript-sdk';
 import { CodingTaskInput, CodingTaskInputSchema } from './schemas';
 import { runClaude } from '../claude-runner';
+import { emitFinishEvent } from '../notify';
 
 function generateBranchName(): string {
   const ts = Date.now();
@@ -75,7 +76,7 @@ export function createSimpleTaskWorkflow(hatchet: HatchetClient, workflowName: s
     },
   });
 
-  // ── Step 3: commit — git add/commit ─────────────────────────
+  // ── Step 3: commit — git add/commit + emit finish event ──────
   workflow.task({
     name: 'commit',
     parents: [executeTask],
@@ -85,29 +86,42 @@ export function createSimpleTaskWorkflow(hatchet: HatchetClient, workflowName: s
       const workDir = prepareResult.workDir;
       const branch = prepareResult.branch;
       const isWorktree = prepareResult.isWorktree;
+      let committed = false;
 
       if (!isWorktree) {
         await ctx.logger.info('[Commit] not a worktree, skipping git commit');
-        return { branch: '', committed: false, result: executeResult.result };
+      } else {
+        const status = execSync('git status --porcelain', { cwd: workDir, encoding: 'utf-8' }).trim();
+        if (!status) {
+          await ctx.logger.info(`[Commit] no changes to commit on branch ${branch}`);
+        } else {
+          await ctx.logger.info(`[Commit] committing changes on branch ${branch}`);
+          execSync('git add -A', { cwd: workDir, stdio: 'pipe' });
+          const message = `coding-worker: ${input.description.slice(0, 72)}`;
+          execSync(`git commit -m ${JSON.stringify(message)}`, { cwd: workDir, stdio: 'pipe' });
+          await ctx.logger.info(`[Commit] committed to branch: ${branch}`);
+
+          const baseDir = input.workDir || process.cwd();
+          execSync(`git worktree remove "${workDir}"`, { cwd: baseDir, stdio: 'pipe' });
+          await ctx.logger.info(`[Commit] worktree removed, branch ${branch} preserved`);
+          committed = true;
+        }
       }
 
-      const status = execSync('git status --porcelain', { cwd: workDir, encoding: 'utf-8' }).trim();
-      if (!status) {
-        await ctx.logger.info(`[Commit] no changes to commit on branch ${branch}`);
-        return { branch, committed: false, result: executeResult.result };
-      }
+      const result = executeResult.result;
 
-      await ctx.logger.info(`[Commit] committing changes on branch ${branch}`);
-      execSync('git add -A', { cwd: workDir, stdio: 'pipe' });
-      const message = `coding-worker: ${input.description.slice(0, 72)}`;
-      execSync(`git commit -m ${JSON.stringify(message)}`, { cwd: workDir, stdio: 'pipe' });
-      await ctx.logger.info(`[Commit] committed to branch: ${branch}`);
+      await emitFinishEvent(hatchet, workflowName, {
+        runId: ctx.workflowRunId(),
+        workflowName,
+        prompt: input.description,
+        codingOutput: result,
+        status: 'completed',
+        branch: branch || undefined,
+        committed,
+      });
+      await ctx.logger.info(`[Commit] finish event emitted for run ${ctx.workflowRunId()}`);
 
-      const baseDir = input.workDir || process.cwd();
-      execSync(`git worktree remove "${workDir}"`, { cwd: baseDir, stdio: 'pipe' });
-      await ctx.logger.info(`[Commit] worktree removed, branch ${branch} preserved`);
-
-      return { branch, committed: true, workDir, result: executeResult.result };
+      return { branch, committed, workDir, result };
     },
   });
 
