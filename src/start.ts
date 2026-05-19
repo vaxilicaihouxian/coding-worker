@@ -30,7 +30,7 @@ export async function startWorker(cliArgs: CliArgs) {
 
   // 5. Register workflow
   const codingTaskWorkflow = createCodingTaskWorkflow(hatchet, workflowName);
-
+  console.log(`Actual slots: ${config.slots}`);
   // 6. Create and start worker
   const worker = await hatchet.worker(workerName, {
     workflows: [codingTaskWorkflow],
@@ -38,7 +38,7 @@ export async function startWorker(cliArgs: CliArgs) {
   });
 
   console.log(`coding-worker "${workerName}" connected (tls: ${config.tls_strategy})`);
-  console.log(`Workflow: ${workflowName} | Plugin: oh-my-claudecode (bundled)`);
+  console.log(`Workflow: ${workflowName}`);
   console.log('Waiting for tasks...');
 
   await worker.start();
