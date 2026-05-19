@@ -16,6 +16,7 @@ It connects to a Hatchet instance as a worker, receives coding tasks from the qu
   - `coding` — Supports `autopilot` (autonomous execution) and `ralplan` (plan-then-execute) modes via oh-my-claudecode
 - **Git Worktree Isolation** — Each task runs in an isolated git worktree on a new branch; changes are auto-committed and the worktree is cleaned up while the branch is preserved for review
 - **Real-time Logging** — Every Claude Code step (thinking, tool calls, tool results) is streamed back through Hatchet logs
+- **Task Completion Notification** — When a coding task finishes, a markdown notification (with task status, branch, output summary) is automatically sent to Infoflow webhook
 - **Flexible Configuration** — Supports config file (`.coding-worker.yaml`), environment variables, and CLI flags
 
 ## Prerequisites
@@ -86,6 +87,12 @@ All configuration can be done via environment variables (recommended) or CLI fla
 | `CODING_WORKER_WORKFLOW_SUFFIX` | Workflow name suffix |
 | `CODING_WORKER_SLOTS` | Max concurrent tasks (default: 2) |
 | `CODING_WORKER_WORK_DIR` | Claude Code working directory (default: cwd) |
+
+**Notification settings:**
+
+| Variable | Description |
+|---|---|
+| `INFOFLOW_WEBHOOK_URL` | Infoflow webhook URL for task completion notifications (omit to disable) |
 
 **Priority:** CLI flags > environment variables > config file > JWT defaults.
 

@@ -16,6 +16,7 @@
   - `coding` — 支持 `autopilot`（自主执行）和 `ralplan`（先规划后执行）模式，依赖 oh-my-claudecode
 - **Git Worktree 隔离** — 每个任务在独立的 git worktree 和新分支上执行；变更自动提交，worktree 清理后分支保留供审查
 - **实时日志** — Claude Code 的每一步（思考、工具调用、工具结果）都通过 Hatchet 日志流式推送
+- **任务完成通知** — 编码任务完成后自动向 Infoflow Webhook 发送 Markdown 通知，包含任务状态、分支、输出摘要等信息
 - **灵活配置** — 支持配置文件（`.coding-worker.yaml`）、环境变量和命令行参数
 
 ## 前置要求
@@ -86,6 +87,12 @@ export ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4-flash
 | `CODING_WORKER_WORKFLOW_SUFFIX` | 工作流名称后缀 |
 | `CODING_WORKER_SLOTS` | 最大并发任务数（默认: 2） |
 | `CODING_WORKER_WORK_DIR` | Claude Code 工作目录（默认: 当前目录） |
+
+**通知设置：**
+
+| 变量 | 说明 |
+|---|---|
+| `INFOFLOW_WEBHOOK_URL` | Infoflow Webhook 地址，用于接收任务完成通知（省略则禁用通知） |
 
 **优先级：** 命令行参数 > 环境变量 > 配置文件 > JWT 默认值。
 
